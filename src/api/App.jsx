@@ -11,8 +11,8 @@ function App() {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [accountId, setAccountId] = useState("");
+  
 
-  // RailsにJSONであることを教えるためのエンドポイント
   const authEndpoint = isSignup ? "/users.json" : "/users/sign_in.json";
 
   useEffect(() => {
@@ -30,22 +30,31 @@ function App() {
 
   const handleAuth = async (e) => {
     e.preventDefault();
-    const payload = { 
-      user: isSignup 
-        ? { email, password, password_confirmation: password, username, account_id: accountId }
-        : { email, password }
-    };
+    const userPayload = isSignup 
+      ? { email, password, password_confirmation: password, username, account_id: accountId }
+      : { email, password };
+
     try {
-      const response = await api.post(`http://localhost:3000${authEndpoint}`, payload);
-      console.log("全ヘッダー:", response.headers);
-      const newToken = response.headers['authorization']; 
+      const response = await api.post(`http://localhost:3000${authEndpoint}`, { user: userPayload });
+      
+      // トークン取得を強化（ヘッダーまたはボディから）
+      const newToken = response.headers['authorization'] || response.headers['Authorization'] || response.data?.token;
+
       if (newToken) {
         localStorage.setItem("token", newToken);
         setToken(newToken);
+        // 成功したら入力欄をリセット
         setEmail(""); setPassword(""); setAccountId(""); setUsername("");
+      } else {
+        alert("登録成功しました。ログインしてください。");
+        setIsSignup(false);
       }
     } catch (error) {
-      alert("認証に失敗しました。入力内容を確認してください。");
+      const errs = error.response?.data?.errors;
+      let msg = "認証に失敗しました。";
+      if (Array.isArray(errs)) msg = errs.join("\n");
+      else if (typeof errs === 'object') msg = Object.entries(errs).map(([k, v]) => `${k} ${v}`).join("\n");
+      alert(msg);
     }
   };
 
@@ -63,10 +72,11 @@ function App() {
       const response = await api.post("http://localhost:3000/api/posts.json", { 
         post: { content } 
       });
+      // 新しい投稿をリストの先頭に追加
       setPosts([response.data, ...posts]);
       setContent("");
     } catch (error) {
-      alert("投稿に失敗しました。ログインし直してみてください。");
+      alert("投稿に失敗しました。");
     } finally {
       setLoading(false);
     }
@@ -82,12 +92,12 @@ function App() {
     }
   };
 
-  // ログイン・新規登録画面
+
   if (!token) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4 font-sans text-white w-full">
         <div className="w-full max-w-[400px] p-8 border border-gray-800 rounded-2xl">
-          <h2 className="text-2xl font-bold text-center mb-8">いま起きていることを見届けよう</h2>
+          <h2 className="text-2xl font-bold text-center mb-8">{isSignup ? "アカウント作成" : "ログイン"}</h2>
           <form onSubmit={handleAuth} className="space-y-4">
             {isSignup && (
               <>
@@ -109,32 +119,24 @@ function App() {
     );
   }
 
-  // メイン画面（中央寄せX風レイアウト）
+
   return (
     <div className="min-h-screen bg-black text-white font-sans w-full">
       <main className="w-full max-w-[600px] mx-auto border-x border-gray-800 min-h-screen">
         <header className="sticky top-0 bg-black/80 backdrop-blur-md z-10 p-4 border-b border-gray-800 flex justify-between items-center">
           <h1 className="text-xl font-bold">ホーム</h1>
-          <button onClick={handleLogout} className="text-xs font-bold text-gray-500 hover:text-white transition">
-            ログアウト
-          </button>
+          <button onClick={handleLogout} className="text-xs font-bold text-gray-500 hover:text-white transition">ログアウト</button>
         </header>
 
         <div className="p-4 border-b border-gray-800">
           <form onSubmit={handlePostSubmit}>
             <textarea
               className="w-full text-xl placeholder-gray-600 outline-none resize-none py-2 bg-transparent text-white"
-              placeholder="いまどうしてる？"
-              rows="3"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
+              placeholder="いまどうしてる？" rows="3" value={content} onChange={(e) => setContent(e.target.value)}
             />
             <div className="flex justify-end pt-2 border-t border-gray-800 mt-2">
-              <button 
-                type="submit" 
-                disabled={!content.trim() || loading} 
-                className={`bg-[#1d9bf0] text-white px-5 py-2 rounded-full font-bold transition ${(!content.trim() || loading) ? 'opacity-50' : 'hover:bg-[#1a8cd8]'}`}
-              >
+              <button type="submit" disabled={!content.trim() || loading} 
+                className={`bg-[#1d9bf0] text-white px-5 py-2 rounded-full font-bold transition ${(!content.trim() || loading) ? 'opacity-50' : 'hover:bg-[#1a8cd8]'}`}>
                 {loading ? '...' : '投稿する'}
               </button>
             </div>
@@ -143,15 +145,15 @@ function App() {
 
         <div className="divide-y divide-gray-800">
           {posts.map((post) => (
-            <article key={post.id} className="p-4 hover:bg-white/[0.03] transition flex flex-col gap-1 cursor-pointer">
+            <article key={post.id} className="p-4 hover:bg-white/[0.03] transition flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-[15px]">
-                  <span className="font-bold hover:underline text-white">{post.user?.username || "user"}</span>
-                  <span className="text-gray-500 text-sm">@{post.user?.account_id || "id"}</span>
-                  <span className="text-gray-500 text-sm">· {new Date(post.created_at).toLocaleDateString()}</span>
+                  <span className="font-bold hover:underline text-white">{post.user?.username || "名無しユーザー"}</span>
+                  <span className="text-gray-500 text-sm">@{post.user?.account_id || "unknown"}</span>
+                  <span className="text-gray-500 text-sm">· {post.created_at ? new Date(post.created_at).toLocaleDateString() : ""}</span>
                 </div>
                 <button onClick={() => handleDeletePost(post.id)} className="text-gray-600 hover:text-red-500 transition">
-                  🗑️
+                  <i className="fa-solid fa-trash"></i>
                 </button>
               </div>
               <p className="text-[15px] leading-normal text-gray-100 whitespace-pre-wrap">{post.content}</p>
