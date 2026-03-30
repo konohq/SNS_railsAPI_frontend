@@ -20,8 +20,8 @@ function App() {
   const [password, setPassword] = useState("");
 
   //フォロー・フォロワー数
-  const [followingCount, setFollowingCount] = useState(localStorage.getItem("followingCount") || 0);
-  const [followersCount, setFollowersCount] = useState(localStorage.getItem("followersCount") || 0);
+  const [followingCount, setFollowingCount] = useState(Number(localStorage.getItem("followingCount")) || 0);
+  const [followersCount, setFollowersCount] = useState(Number(localStorage.getItem("followersCount")) || 0);
 
   // ユーザー一覧モーダル用
   const [userList, setUserList] = useState([]); 
@@ -50,28 +50,35 @@ function App() {
     });
   }, [token]);
 
-  useEffect(() => { if (token) fetchPosts(); }, [token, apiClient]);
+  useEffect(() => { 
+    if (token) fetchPosts(); 
+  }, [token, apiClient]);
 
   const fetchPosts = async () => {
     try {
       const response = await apiClient.get("/api/posts.json");
       if (Array.isArray(response.data)) {
         setPosts(response.data);
+        // 自分の投稿データから最新のプロフィール情報を探して同期
         const myData = response.data.find(p => (p.user?.account_id === accountId || p.user?.accountId === accountId));
         if (myData) {
-          setFollowingCount(myData.user.following_count || 0);
-          setFollowersCount(myData.user.followers_count || 0);
+          const u = myData.user;
+          setFollowingCount(u.following_count ?? 0);
+          setFollowersCount(u.followers_count ?? 0);
+          // bioなども随時同期したい場合はここでセット
+          if (u.bio !== undefined) setBio(u.bio);
         }
       }
     } catch (error) { console.error(error); }
   };
 
-  // ユーザーリスト（フォロー/フォロワー）を取得する関数
   const fetchUserList = async (type) => {
     try {
-      // 自分のIDをpostsデータから特定
       const myPost = posts.find(p => (p.user?.account_id === accountId || p.user?.accountId === accountId));
-      if (!myPost) return;
+      if (!myPost) {
+        alert("ユーザー情報の取得に失敗しました。一度投稿するか、再読み込みしてください。");
+        return;
+      }
 
       const userId = myPost.user.id;
       const endpoint = type === "following" ? `/api/users/${userId}/following.json` : `/api/users/${userId}/followers.json`;
@@ -101,13 +108,9 @@ function App() {
         await apiClient.post("/api/relationships.json", { followed_id: targetUserId });
       }
       fetchPosts();
-      // モーダルが開いている場合は、リスト内の状態も更新するために再取得
       if (showListModal) {
-        const type = listTitle === "フォロー中" ? "following" : "followers";
-        const myPost = posts.find(p => (p.user?.account_id === accountId || p.user?.accountId === accountId));
-        const endpoint = type === "following" ? `/api/users/${myPost.user.id}/following.json` : `/api/users/${myPost.user.id}/followers.json`;
-        const res = await apiClient.get(endpoint);
-        setUserList(res.data);
+        // リスト内のボタン表示を即座に切り替えるための簡易的な更新ルーチン
+        setUserList(prev => prev.map(u => u.id === targetUserId ? { ...u, is_followed_by_me: !isFollowing } : u));
       }
     } catch (err) {
       alert("フォロー操作に失敗しました。");
@@ -125,15 +128,20 @@ function App() {
       const res = await apiClient.put("/api/profile.json", formData);
       const u = res.data; 
 
-      setUsername(u.username);
-      setAccountId(u.accountId || u.account_id);
-      setAvatarUrl(u.avatarUrl || u.avatar_url);
-      setBio(u.bio);
+      const updatedUsername = u.username || "";
+      const updatedAccountId = u.accountId || u.account_id || "";
+      const updatedAvatar = u.avatarUrl || u.avatar_url || "";
+      const updatedBio = u.bio || "";
+
+      setUsername(updatedUsername);
+      setAccountId(updatedAccountId);
+      setAvatarUrl(updatedAvatar);
+      setBio(updatedBio);
       
-      localStorage.setItem("username", u.username);
-      localStorage.setItem("accountId", u.accountId || u.account_id);
-      localStorage.setItem("avatarUrl", u.avatarUrl || u.avatar_url || "");
-      localStorage.setItem("bio", u.bio || "");
+      localStorage.setItem("username", updatedUsername);
+      localStorage.setItem("accountId", updatedAccountId);
+      localStorage.setItem("avatarUrl", updatedAvatar);
+      localStorage.setItem("bio", updatedBio);
 
       setIsEditingProfile(false);
       setAvatarPreview(null);
@@ -244,27 +252,56 @@ function App() {
           e.preventDefault();
           const endpoint = isSignup ? "/users.json" : "/users/sign_in.json";
           try {
-            const res = await axios.post(`${API_BASE_URL}${endpoint}`, { user: { email, password, username, account_id: accountId } });
+            // 送信パラメータの整理
+            const payload = isSignup 
+              ? { user: { email, password, username, account_id: accountId } }
+              : { user: { email, password } };
+
+            const res = await axios.post(`${API_BASE_URL}${endpoint}`, payload);
             const newToken = res.headers['authorization']?.split(' ')[1] || res.data?.token;
+            
             if (newToken) {
-              localStorage.setItem("token", newToken); setToken(newToken);
+              localStorage.setItem("token", newToken); 
+              setToken(newToken);
+              
               const u = res.data.user || res.data;
-              setUsername(u.username); setAccountId(u.accountId || u.account_id); setAvatarUrl(u.avatarUrl || u.avatar_url); setBio(u.bio || "");
-              localStorage.setItem("username", u.username); localStorage.setItem("accountId", u.accountId || u.account_id);
-              localStorage.setItem("avatarUrl", u.avatarUrl || u.avatar_url || ""); localStorage.setItem("bio", u.bio || "");
+              const uName = u.username || "";
+              const uAccId = u.accountId || u.account_id || "";
+              const uAvatar = u.avatarUrl || u.avatar_url || "";
+              const uBio = u.bio || "";
+
+              setUsername(uName); 
+              setAccountId(uAccId); 
+              setAvatarUrl(uAvatar); 
+              setBio(uBio);
+
+              localStorage.setItem("username", uName); 
+              localStorage.setItem("accountId", uAccId);
+              localStorage.setItem("avatarUrl", uAvatar); 
+              localStorage.setItem("bio", uBio);
+              
               setView("home"); 
             }
-          } catch (error) { alert("認証失敗"); }
-        }} className="w-full max-sm space-y-4 border border-gray-800 p-10 rounded-3xl bg-[#16181c]/50">
+          } catch (error) { 
+            console.error(error);
+            alert("認証に失敗しました。入力内容を確認してください。"); 
+          }
+        }} className="w-full max-w-sm space-y-4 border border-gray-800 p-10 rounded-3xl bg-[#16181c]/50">
           <h2 className="text-4xl font-black text-center mb-8 italic text-white">SNS</h2>
           {isSignup && (
-            <><input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none" placeholder="ユーザーID" value={accountId} onChange={e => setAccountId(e.target.value)} />
-            <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none" placeholder="表示名" value={username} onChange={e => setUsername(e.target.value)} /></>
+            <>
+              <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="ユーザーID (例: user123)" value={accountId} onChange={e => setAccountId(e.target.value)} />
+              <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="表示名" value={username} onChange={e => setUsername(e.target.value)} />
+            </>
           )}
-          <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none" placeholder="メール" type="email" value={email} onChange={e => setEmail(e.target.value)} />
-          <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none" placeholder="パスワード" type="password" value={password} onChange={e => setPassword(e.target.value)} />
-          <button className="w-full bg-white text-black p-3 rounded-full font-bold">ログイン</button>
-          <button type="button" onClick={() => setIsSignup(!isSignup)} className="text-[#1d9bf0] text-sm w-full text-center mt-2">{isSignup ? "ログインへ" : "新規登録へ"}</button>
+          <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="メール" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+          <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="パスワード" type="password" value={password} onChange={e => setPassword(e.target.value)} />
+          <button className="w-full bg-white text-black p-3 rounded-full font-bold hover:bg-gray-200 transition">
+            {isSignup ? "新規登録" : "ログイン"}
+          </button>
+          <button type="button" onClick={() => setIsSignup(!isSignup)} className="text-[#1d9bf0] text-sm w-full text-center mt-2">
+            {isSignup ? "アカウントをお持ちの方はこちら" : "初めての方はこちら"}
+          </button>
         </form>
       </div>
     );
@@ -280,11 +317,13 @@ function App() {
             <button onClick={() => setView("home")} className={`w-full text-left p-3 rounded-full text-xl hover:bg-white/10 flex items-center gap-4 ${view === "home" ? "font-bold" : ""}`}><i className="fa-solid fa-house"></i>ホーム</button>
             <button onClick={() => { setView("profile"); setIsEditingProfile(false); }} className={`w-full text-left p-3 rounded-full text-xl hover:bg-white/10 flex items-center gap-4 ${view === "profile" ? "font-bold" : ""}`}><i className="fa-solid fa-user"></i>プロフィール</button>
           </div>
-          <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="p-3 hover:bg-white/10 rounded-full text-gray-500 mb-4 font-bold">ログアウト</button>
+          <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="p-3 hover:bg-white/10 rounded-full text-gray-500 mb-4 font-bold flex items-center gap-2"><i className="fa-solid fa-right-from-bracket"></i>ログアウト</button>
         </aside>
 
         <main className="flex-grow border-r border-gray-800 max-w-[600px]">
-          <div className="p-4 border-b border-gray-800 font-bold text-xl sticky top-0 bg-black/80 backdrop-blur z-20 text-left">{view === "home" ? "ホーム" : "マイプロフィール"}</div>
+          <div className="p-4 border-b border-gray-800 font-bold text-xl sticky top-0 bg-black/80 backdrop-blur z-20 text-left">
+            {view === "home" ? "ホーム" : "マイプロフィール"}
+          </div>
 
           {view === "home" ? (
             <>
@@ -298,7 +337,7 @@ function App() {
                     <button disabled={content.length === 0} onClick={async () => {
                       await apiClient.post("/api/posts.json", { post: { content } });
                       setContent(""); fetchPosts();
-                    }} className="bg-[#1d9bf0] px-6 py-2 rounded-full font-bold disabled:opacity-50">投稿する</button>
+                    }} className="bg-[#1d9bf0] px-6 py-2 rounded-full font-bold disabled:opacity-50 hover:bg-[#1a8cd8]">投稿する</button>
                   </div>
                 </div>
               </div>
