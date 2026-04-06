@@ -19,16 +19,13 @@ function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  //フォロー・フォロワー数
   const [followingCount, setFollowingCount] = useState(Number(localStorage.getItem("followingCount")) || 0);
   const [followersCount, setFollowersCount] = useState(Number(localStorage.getItem("followersCount")) || 0);
 
-  // ユーザー一覧モーダル用
-  const [userList, setUserList] = useState([]); 
-  const [listTitle, setListTitle] = useState(""); 
+  const [userList, setUserList] = useState([]);
+  const [listTitle, setListTitle] = useState("");
   const [showListModal, setShowListModal] = useState(false);
 
-  // プロフィール編集用
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editUsername, setEditUsername] = useState("");
   const [editAccountId, setEditAccountId] = useState("");
@@ -36,7 +33,6 @@ function App() {
   const [editAvatarFile, setEditAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
 
-  // 画像パス変換ヘルパー
   const getFullUrl = (path) => {
     if (!path || path === "null" || path === "undefined") return null;
     if (path.startsWith("http") || path.startsWith("blob:")) return path;
@@ -50,8 +46,8 @@ function App() {
     });
   }, [token]);
 
-  useEffect(() => { 
-    if (token) fetchPosts(); 
+  useEffect(() => {
+    if (token) fetchPosts();
   }, [token, apiClient]);
 
   const fetchPosts = async () => {
@@ -59,13 +55,11 @@ function App() {
       const response = await apiClient.get("/api/posts.json");
       if (Array.isArray(response.data)) {
         setPosts(response.data);
-        // 自分の投稿データから最新のプロフィール情報を探して同期
         const myData = response.data.find(p => (p.user?.account_id === accountId || p.user?.accountId === accountId));
         if (myData) {
           const u = myData.user;
           setFollowingCount(u.following_count ?? 0);
           setFollowersCount(u.followers_count ?? 0);
-          // bioなども随時同期したい場合はここでセット
           if (u.bio !== undefined) setBio(u.bio);
         }
       }
@@ -75,21 +69,14 @@ function App() {
   const fetchUserList = async (type) => {
     try {
       const myPost = posts.find(p => (p.user?.account_id === accountId || p.user?.accountId === accountId));
-      if (!myPost) {
-        alert("ユーザー情報の取得に失敗しました。一度投稿するか、再読み込みしてください。");
-        return;
-      }
-
+      if (!myPost) { alert("ユーザー情報の取得に失敗しました。"); return; }
       const userId = myPost.user.id;
       const endpoint = type === "following" ? `/api/users/${userId}/following.json` : `/api/users/${userId}/followers.json`;
-      
       const res = await apiClient.get(endpoint);
       setUserList(res.data);
       setListTitle(type === "following" ? "フォロー中" : "フォロワー");
       setShowListModal(true);
-    } catch (err) {
-      alert("リストの取得に失敗しました。");
-    }
+    } catch (err) { alert("リストの取得に失敗しました。"); }
   };
 
   const deletePost = async (id) => {
@@ -109,12 +96,9 @@ function App() {
       }
       fetchPosts();
       if (showListModal) {
-        // リスト内のボタン表示を即座に切り替えるための簡易的な更新ルーチン
         setUserList(prev => prev.map(u => u.id === targetUserId ? { ...u, is_followed_by_me: !isFollowing } : u));
       }
-    } catch (err) {
-      alert("フォロー操作に失敗しました。");
-    }
+    } catch (err) { alert("フォロー操作に失敗しました。"); }
   };
 
   const handleUpdateProfile = async () => {
@@ -124,25 +108,16 @@ function App() {
       formData.append("user[account_id]", editAccountId);
       formData.append("user[bio]", editBio);
       if (editAvatarFile) { formData.append("user[avatar]", editAvatarFile); }
-
       const res = await apiClient.put("/api/profile.json", formData);
-      const u = res.data; 
-
-      const updatedUsername = u.username || "";
-      const updatedAccountId = u.accountId || u.account_id || "";
-      const updatedAvatar = u.avatarUrl || u.avatar_url || "";
-      const updatedBio = u.bio || "";
-
-      setUsername(updatedUsername);
-      setAccountId(updatedAccountId);
-      setAvatarUrl(updatedAvatar);
-      setBio(updatedBio);
-      
-      localStorage.setItem("username", updatedUsername);
-      localStorage.setItem("accountId", updatedAccountId);
-      localStorage.setItem("avatarUrl", updatedAvatar);
-      localStorage.setItem("bio", updatedBio);
-
+      const u = res.data;
+      setUsername(u.username || "");
+      setAccountId(u.account_id || u.accountId || "");
+      setAvatarUrl(u.avatar_url || u.avatarUrl || "");
+      setBio(u.bio || "");
+      localStorage.setItem("username", u.username || "");
+      localStorage.setItem("accountId", u.account_id || u.accountId || "");
+      localStorage.setItem("avatarUrl", u.avatar_url || u.avatarUrl || "");
+      localStorage.setItem("bio", u.bio || "");
       setIsEditingProfile(false);
       setAvatarPreview(null);
       setEditAvatarFile(null);
@@ -150,7 +125,7 @@ function App() {
     } catch (err) { alert("更新に失敗しました。"); }
   };
 
-  // --- ユーザーリスト用モーダルコンポーネント ---
+  // --- モーダル ---
   const UserListModal = () => (
     <div className="fixed inset-0 bg-white/10 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowListModal(false)}>
       <div className="bg-black border border-gray-800 w-full max-w-md rounded-2xl max-h-[70vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -159,16 +134,12 @@ function App() {
           <button onClick={() => setShowListModal(false)} className="text-gray-400 hover:text-white text-2xl">&times;</button>
         </div>
         <div className="overflow-y-auto flex-grow divide-y divide-gray-900">
-          {userList.length === 0 ? (
-            <p className="p-10 text-center text-gray-500">まだ誰もいません</p>
-          ) : (
+          {userList.length === 0 ? <p className="p-10 text-center text-gray-500">まだ誰もいません</p> :
             userList.map(user => (
               <div key={user.id} className="p-4 flex items-center justify-between">
                 <div className="flex gap-3 items-center">
                   <div className="w-10 h-10 rounded-full bg-gray-700 overflow-hidden">
-                    {(user.avatarUrl || user.avatar_url) && (
-                      <img src={getFullUrl(user.avatarUrl || user.avatar_url)} className="w-full h-full object-cover" alt="" />
-                    )}
+                    {(user.avatarUrl || user.avatar_url) && <img src={getFullUrl(user.avatarUrl || user.avatar_url)} className="w-full h-full object-cover" alt="" />}
                   </div>
                   <div>
                     <div className="font-bold">{user.username}</div>
@@ -176,18 +147,13 @@ function App() {
                   </div>
                 </div>
                 {(user.account_id !== accountId && user.accountId !== accountId) && (
-                  <button 
-                    onClick={() => toggleFollow(user.id, user.is_followed_by_me)}
-                    className={`px-4 py-1 rounded-full text-xs font-bold border transition ${
-                      user.is_followed_by_me ? "border-gray-600 text-white" : "bg-white text-black"
-                    }`}
-                  >
+                  <button onClick={() => toggleFollow(user.id, user.is_followed_by_me)} className={`px-4 py-1 rounded-full text-xs font-bold border transition ${user.is_followed_by_me ? "border-gray-600 text-white" : "bg-white text-black"}`}>
                     {user.is_followed_by_me ? "フォロー中" : "フォロー"}
                   </button>
                 )}
               </div>
             ))
-          )}
+          }
         </div>
       </div>
     </div>
@@ -195,53 +161,139 @@ function App() {
 
   const PostItem = ({ post }) => {
     const [showComments, setShowComments] = useState(false);
+    const [commentContent, setCommentContent] = useState("");
+
+    // --- ここからリポスト関連の修正箇所 ---
+    const isReposted = post.isRepostedByMe || post.is_reposted_by_me;
+
+    const handleRepost = async () => {
+      if (isReposted) return; // 既に行っていたらガード
+      
+      try {
+        await apiClient.post("/api/posts.json", { post: { content: "", repost_id: post.id } });
+        fetchPosts();
+      } catch (err) { 
+        if (err.response?.status === 422) {
+          alert("既にリポスト済みです");
+        } else {
+          alert("リポストに失敗しました"); 
+        }
+      }
+    };
+    // --- ここまで ---
+
     const toggleLike = async () => {
       try {
-        post.isLikedByMe ? await apiClient.delete(`/api/posts/${post.id}/likes.json`) : await apiClient.post(`/api/posts/${post.id}/likes.json`);
+        const isLiked = post.isLikedByMe || post.is_liked_by_me;
+        if (isLiked) {
+          await apiClient.delete(`/api/posts/${post.id}/like.json`);
+        } else {
+          await apiClient.post(`/api/posts/${post.id}/like.json`);
+        }
         fetchPosts();
-      } catch (err) { console.error(err); }
+      } catch (err) { console.error("Like error:", err); }
+    };
+
+    const submitComment = async () => {
+      if (!commentContent) return;
+      try {
+        await apiClient.post(`/api/posts/${post.id}/comments.json`, { comment: { content: commentContent } });
+        setCommentContent("");
+        fetchPosts();
+      } catch (err) { alert("リプライの送信に失敗しました"); }
     };
 
     return (
-      <article className="p-4 flex gap-3 border-b border-gray-800 hover:bg-white/[0.02] group transition-colors">
-        <div className="w-10 h-10 rounded-full bg-gray-700 overflow-hidden flex-shrink-0">
-          {(post.user?.avatarUrl || post.user?.avatar_url) && (
-            <img src={getFullUrl(post.user.avatarUrl || post.user.avatar_url)} className="w-full h-full object-cover" alt="avatar" />
-          )}
-        </div>
-        <div className="min-w-0 flex-grow">
-          <div className="flex justify-between items-start">
-            <div className="flex gap-2 items-center min-w-0">
-              <span className="font-bold truncate">{post.user?.username}</span>
-              <span className="text-gray-500 text-sm truncate">@{post.user?.accountId || post.user?.account_id}</span>
-              {(post.user?.account_id !== accountId && post.user?.accountId !== accountId) && (
-                <button 
-                  onClick={() => toggleFollow(post.user.id, post.user.is_followed_by_me)}
-                  className={`ml-2 px-3 py-1 rounded-full text-xs font-bold border transition ${
-                    post.user.is_followed_by_me ? "border-gray-600 text-white" : "bg-white text-black"
-                  }`}
-                >
-                  {post.user.is_followed_by_me ? "フォロー中" : "フォロー"}
-                </button>
+      <div className="border-b border-gray-800">
+        <article className="p-4 flex gap-3 hover:bg-white/[0.02] group transition-colors text-left">
+          <div className="w-10 h-10 rounded-full bg-gray-700 overflow-hidden flex-shrink-0">
+            {(post.user?.avatarUrl || post.user?.avatar_url) && <img src={getFullUrl(post.user.avatarUrl || post.user.avatar_url)} className="w-full h-full object-cover" alt="avatar" />}
+          </div>
+          <div className="min-w-0 flex-grow">
+            {/* ---リポストラベル --- */}
+            {post.repost && !post.content && (
+              <div className="flex items-center gap-2 text-gray-500 text-xs font-bold mb-1">
+                <i className="fa-solid fa-retweet"></i>
+                <span>{post.user?.username}さんがリポストしました</span>
+              </div>
+            )}
+
+            <div className="flex justify-between items-start">
+              <div className="flex gap-2 items-center min-w-0">
+                <span className="font-bold truncate">{post.user?.username}</span>
+                <span className="text-gray-500 text-sm truncate">@{post.user?.accountId || post.user?.account_id}</span>
+              </div>
+              {(post.user?.accountId === accountId || post.user?.account_id === accountId) && (
+                <button onClick={() => deletePost(post.id)} className="text-gray-500 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100"><i className="fa-solid fa-trash"></i></button>
               )}
             </div>
-            {(post.user?.accountId === accountId || post.user?.account_id === accountId) && (
-              <button onClick={() => deletePost(post.id)} className="text-gray-500 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100"><i className="fa-solid fa-trash"></i></button>
+
+            {/* 自分のコメント */}
+            {post.content && <p className="mt-1 text-gray-100 break-words leading-relaxed">{post.content}</p>}
+
+            {/* ---リポスト元の引用カード --- */}
+            {post.repost && (
+              <div className="mt-2 border border-gray-800 rounded-2xl p-3 hover:bg-white/[0.03] transition">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-5 h-5 rounded-full bg-gray-700 overflow-hidden">
+                    {post.repost.user?.avatarUrl && <img src={getFullUrl(post.repost.user.avatarUrl)} className="w-full h-full object-cover" alt="" />}
+                  </div>
+                  <span className="font-bold text-sm">{post.repost.user?.username}</span>
+                  <span className="text-gray-500 text-xs">@{post.repost.user?.accountId}</span>
+                </div>
+                <p className="text-sm text-gray-300">{post.repost.content}</p>
+              </div>
             )}
+
+            <div className="flex gap-6 mt-3 text-gray-500">
+              <button onClick={toggleLike} className={`flex items-center gap-2 hover:text-pink-500 ${post.isLikedByMe ? "text-pink-500" : ""}`}>
+                <i className={`${post.isLikedByMe ? "fa-solid" : "fa-regular"} fa-heart`}></i>
+                <span className="text-sm">{post.likesCount || 0}</span>
+              </button>
+
+              {/* ---リポストボタン --- */}
+              <button 
+                onClick={handleRepost} 
+                disabled={isReposted}
+                className={`flex items-center gap-2 transition ${isReposted ? "text-green-500 cursor-default" : "hover:text-green-500"}`}
+              >
+                <i className="fa-solid fa-retweet"></i>
+                <span className="text-sm">{isReposted ? "リポスト済み" : ""}</span>
+              </button>
+
+              <button onClick={() => setShowComments(!showComments)} className={`flex items-center gap-2 hover:text-[#1d9bf0] ${showComments ? "text-[#1d9bf0]" : ""}`}>
+                <i className="fa-regular fa-comment"></i>
+                <span className="text-sm">{post.commentsCount || post.comments?.length || 0}</span>
+              </button>
+            </div>
           </div>
-          <p className="mt-1 text-gray-100 break-words leading-relaxed text-left">{post.content}</p>
-          <div className="flex gap-6 mt-3 text-gray-500">
-            <button onClick={toggleLike} className={`flex items-center gap-2 hover:text-pink-500 ${post.isLikedByMe ? "text-pink-500" : ""}`}>
-              <i className={`${post.isLikedByMe ? "fa-solid" : "fa-regular"} fa-heart`}></i>
-              <span className="text-sm">{post.likesCount || 0}</span>
-            </button>
-            <button onClick={() => setShowComments(!showComments)} className="flex items-center gap-2 hover:text-[#1d9bf0]">
-              <i className="fa-regular fa-comment"></i>
-              <span className="text-sm">{post.comments?.length || 0}</span>
-            </button>
+        </article>
+
+        {showComments && (
+          <div className="bg-white/[0.01] pb-2 text-left">
+            <div className="px-14 py-2 border-b border-gray-900 flex gap-2">
+              <input className="flex-grow bg-transparent border-b border-gray-800 outline-none text-sm p-1 focus:border-[#1d9bf0]" placeholder="返信をツイート" value={commentContent} onChange={e => setCommentContent(e.target.value)} />
+              <button onClick={submitComment} className="bg-[#1d9bf0] text-white px-3 py-1 rounded-full text-xs font-bold">返信</button>
+            </div>
+            <div className="divide-y divide-gray-900">
+              {(post.comments || []).map(c => (
+                <div key={c.id} className="px-14 py-3 flex gap-3 text-left">
+                  <div className="w-8 h-8 rounded-full bg-gray-800 overflow-hidden flex-shrink-0">
+                    {c.user?.avatar_url && <img src={getFullUrl(c.user.avatar_url)} className="w-full h-full object-cover" alt="" />}
+                  </div>
+                  <div>
+                    <div className="flex gap-2 items-center text-xs">
+                      <span className="font-bold text-gray-200">{c.user?.username}</span>
+                      <span className="text-gray-500">@{c.user?.account_id}</span>
+                    </div>
+                    <p className="text-sm text-gray-300 mt-1">{c.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </article>
+        )}
+      </div>
     );
   };
 
@@ -252,56 +304,29 @@ function App() {
           e.preventDefault();
           const endpoint = isSignup ? "/users.json" : "/users/sign_in.json";
           try {
-            // 送信パラメータの整理
-            const payload = isSignup 
-              ? { user: { email, password, username, account_id: accountId } }
-              : { user: { email, password } };
-
+            const payload = isSignup ? { user: { email, password, username, account_id: accountId } } : { user: { email, password } };
             const res = await axios.post(`${API_BASE_URL}${endpoint}`, payload);
             const newToken = res.headers['authorization']?.split(' ')[1] || res.data?.token;
-            
             if (newToken) {
-              localStorage.setItem("token", newToken); 
-              setToken(newToken);
-              
+              localStorage.setItem("token", newToken); setToken(newToken);
               const u = res.data.user || res.data;
-              const uName = u.username || "";
-              const uAccId = u.accountId || u.account_id || "";
-              const uAvatar = u.avatarUrl || u.avatar_url || "";
-              const uBio = u.bio || "";
-
-              setUsername(uName); 
-              setAccountId(uAccId); 
-              setAvatarUrl(uAvatar); 
-              setBio(uBio);
-
-              localStorage.setItem("username", uName); 
-              localStorage.setItem("accountId", uAccId);
-              localStorage.setItem("avatarUrl", uAvatar); 
-              localStorage.setItem("bio", uBio);
-              
-              setView("home"); 
+              setUsername(u.username || ""); setAccountId(u.account_id || u.accountId || ""); setAvatarUrl(u.avatar_url || u.avatarUrl || ""); setBio(u.bio || "");
+              localStorage.setItem("username", u.username || ""); localStorage.setItem("accountId", u.account_id || u.accountId || ""); localStorage.setItem("avatarUrl", u.avatar_url || u.avatarUrl || ""); localStorage.setItem("bio", u.bio || "");
+              setView("home");
             }
-          } catch (error) { 
-            console.error(error);
-            alert("認証に失敗しました。入力内容を確認してください。"); 
-          }
+          } catch (error) { alert("認証に失敗しました。"); }
         }} className="w-full max-w-sm space-y-4 border border-gray-800 p-10 rounded-3xl bg-[#16181c]/50">
           <h2 className="text-4xl font-black text-center mb-8 italic text-white">SNS</h2>
           {isSignup && (
             <>
-              <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="ユーザーID (例: user123)" value={accountId} onChange={e => setAccountId(e.target.value)} />
+              <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="ユーザーID" value={accountId} onChange={e => setAccountId(e.target.value)} />
               <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="表示名" value={username} onChange={e => setUsername(e.target.value)} />
             </>
           )}
           <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="メール" type="email" value={email} onChange={e => setEmail(e.target.value)} />
           <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="パスワード" type="password" value={password} onChange={e => setPassword(e.target.value)} />
-          <button className="w-full bg-white text-black p-3 rounded-full font-bold hover:bg-gray-200 transition">
-            {isSignup ? "新規登録" : "ログイン"}
-          </button>
-          <button type="button" onClick={() => setIsSignup(!isSignup)} className="text-[#1d9bf0] text-sm w-full text-center mt-2">
-            {isSignup ? "アカウントをお持ちの方はこちら" : "初めての方はこちら"}
-          </button>
+          <button className="w-full bg-white text-black p-3 rounded-full font-bold hover:bg-gray-200 transition">{isSignup ? "新規登録" : "ログイン"}</button>
+          <button type="button" onClick={() => setIsSignup(!isSignup)} className="text-[#1d9bf0] text-sm w-full text-center mt-2">{isSignup ? "アカウントをお持ちの方" : "初めての方"}</button>
         </form>
       </div>
     );
@@ -310,7 +335,6 @@ function App() {
   return (
     <div className="min-h-screen bg-black text-white flex justify-center">
       {showListModal && <UserListModal />}
-      
       <div className="max-w-[1200px] w-full flex">
         <aside className="w-[240px] sticky top-0 h-screen p-4 flex flex-col justify-between border-r border-gray-800">
           <div className="space-y-4 pt-4 text-left">
@@ -327,7 +351,7 @@ function App() {
 
           {view === "home" ? (
             <>
-              <div className="p-4 border-b border-gray-800 flex gap-3">
+              <div className="p-4 border-b border-gray-800 flex gap-3 text-left">
                 <div className="w-10 h-10 rounded-full bg-gray-700 overflow-hidden flex-shrink-0">
                   {avatarUrl && <img src={getFullUrl(avatarUrl)} className="w-full h-full object-cover" alt="me" />}
                 </div>
@@ -349,28 +373,18 @@ function App() {
                 <div className="h-32 bg-[#2f3336]"></div>
                 <div className="px-4 flex justify-between items-end relative">
                   <div className="w-32 h-32 rounded-full bg-gray-700 overflow-hidden border-4 border-black -mt-16 z-10 shadow-lg bg-black">
-                    {(avatarPreview || avatarUrl) && (
-                      <img src={avatarPreview || getFullUrl(avatarUrl)} className="w-full h-full object-cover" alt="profile" />
-                    )}
+                    {(avatarPreview || avatarUrl) && <img src={avatarPreview || getFullUrl(avatarUrl)} className="w-full h-full object-cover" alt="profile" />}
                   </div>
-                  {!isEditingProfile && (
-                    <button onClick={() => { 
-                      setEditUsername(username); setEditAccountId(accountId); setEditBio(bio); setIsEditingProfile(true); 
-                    }} className="mb-2 border border-gray-600 px-4 py-1.5 rounded-full font-bold hover:bg-white/10 transition text-white">編集</button>
-                  )}
+                  {!isEditingProfile && <button onClick={() => { setEditUsername(username); setEditAccountId(accountId); setEditBio(bio); setIsEditingProfile(true); }} className="mb-2 border border-gray-600 px-4 py-1.5 rounded-full font-bold hover:bg-white/10 transition text-white">編集</button>}
                 </div>
-                
                 {isEditingProfile ? (
                   <div className="mt-4 px-4 space-y-4">
                     <input className="w-full bg-black border border-gray-700 p-2 rounded outline-none focus:border-[#1d9bf0]" value={editUsername} onChange={e => setEditUsername(e.target.value)} placeholder="表示名" />
                     <input className="w-full bg-black border border-gray-700 p-2 rounded outline-none focus:border-[#1d9bf0]" value={editAccountId} onChange={e => setEditAccountId(e.target.value)} placeholder="ユーザーID" />
-                    <textarea className="w-full bg-black border border-gray-700 p-2 rounded outline-none h-24 resize-none focus:border-[#1d9bf0]" value={editBio} onChange={e => setEditBio(e.target.value)} placeholder="自己紹介を入力" />
+                    <textarea className="w-full bg-black border border-gray-700 p-2 rounded outline-none h-24 resize-none focus:border-[#1d9bf0]" value={editBio} onChange={e => setEditBio(e.target.value)} placeholder="自己紹介" />
                     <label className="inline-block bg-white text-black px-4 py-2 rounded-full font-bold text-sm cursor-pointer hover:bg-gray-200">
                       画像を変更
-                      <input type="file" className="hidden" accept="image/*" onChange={e => {
-                        const f = e.target.files[0];
-                        if (f) { setEditAvatarFile(f); setAvatarPreview(URL.createObjectURL(f)); }
-                      }} />
+                      <input type="file" className="hidden" accept="image/*" onChange={e => { const f = e.target.files[0]; if (f) { setEditAvatarFile(f); setAvatarPreview(URL.createObjectURL(f)); } }} />
                     </label>
                     <div className="flex gap-2">
                       <button onClick={handleUpdateProfile} className="bg-[#1d9bf0] text-white px-4 py-2 rounded-full font-bold flex-1">保存</button>
@@ -382,22 +396,14 @@ function App() {
                     <h2 className="text-2xl font-extrabold text-white">{username}</h2>
                     <p className="text-gray-500 text-lg">@{accountId}</p>
                     <div className="flex gap-5 mt-3 text-sm">
-                      <div onClick={() => fetchUserList("following")} className="flex gap-1 hover:underline cursor-pointer">
-                        <span className="font-bold text-white">{followingCount}</span>
-                        <span className="text-gray-500">フォロー中</span>
-                      </div>
-                      <div onClick={() => fetchUserList("followers")} className="flex gap-1 hover:underline cursor-pointer">
-                        <span className="font-bold text-white">{followersCount}</span>
-                        <span className="text-gray-500">フォロワー</span>
-                      </div>
+                      <div onClick={() => fetchUserList("following")} className="flex gap-1 hover:underline cursor-pointer"><span className="font-bold text-white">{followingCount}</span><span className="text-gray-500">フォロー中</span></div>
+                      <div onClick={() => fetchUserList("followers")} className="flex gap-1 hover:underline cursor-pointer"><span className="font-bold text-white">{followersCount}</span><span className="text-gray-500">フォロワー</span></div>
                     </div>
                     <p className="mt-3 text-gray-200 whitespace-pre-wrap">{bio || "自己紹介がありません"}</p>
                   </div>
                 )}
               </div>
-              <div className="divide-y divide-gray-800">
-                {posts.filter(p => (p.user?.accountId === accountId || p.user?.account_id === accountId)).map(p => <PostItem key={p.id} post={p} />)}
-              </div>
+              <div className="divide-y divide-gray-800">{posts.filter(p => (p.user?.accountId === accountId || p.user?.account_id === accountId)).map(p => <PostItem key={p.id} post={p} />)}</div>
             </>
           )}
         </main>
