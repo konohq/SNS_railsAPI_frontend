@@ -1,5 +1,5 @@
 import { useState } from "react";
-import api from "./client";
+import api, { getApiErrorMessage } from "./client";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -18,7 +18,7 @@ const Login = () => {
         window.location.href = "/";
       }
     } catch (error) {
-      alert("ログイン失敗！メアドかパスが違います。");
+      alert(getApiErrorMessage(error, "ログインに失敗しました。"));
     }
   };
 

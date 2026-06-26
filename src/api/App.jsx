@@ -1,7 +1,6 @@
-import React, { useEffect, useState, useMemo } from "react";
-import axios from "axios";
+import React, { useCallback, useEffect, useState } from "react";
+import api, { API_BASE_URL, getApiErrorMessage } from "./client";
 
-const API_BASE_URL = "http://localhost:3000";
 const MAX_CHARS = 140;
 
 function App() {
@@ -39,20 +38,9 @@ function App() {
     return `${API_BASE_URL}${path}`;
   };
 
-  const apiClient = useMemo(() => {
-    return axios.create({
-      baseURL: API_BASE_URL,
-      headers: { Authorization: token ? `Bearer ${token}` : "" }
-    });
-  }, [token]);
-
-  useEffect(() => {
-    if (token) fetchPosts();
-  }, [token, apiClient]);
-
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     try {
-      const response = await apiClient.get("/api/posts.json");
+      const response = await api.get("/api/posts.json");
       if (Array.isArray(response.data)) {
         setPosts(response.data);
         const myData = response.data.find(p => (p.user?.account_id === accountId || p.user?.accountId === accountId));
@@ -64,7 +52,11 @@ function App() {
         }
       }
     } catch (error) { console.error(error); }
-  };
+  }, [accountId]);
+
+  useEffect(() => {
+    if (token) fetchPosts();
+  }, [token, fetchPosts]);
 
   const fetchUserList = async (type) => {
     try {
@@ -72,33 +64,33 @@ function App() {
       if (!myPost) { alert("ユーザー情報の取得に失敗しました。"); return; }
       const userId = myPost.user.id;
       const endpoint = type === "following" ? `/api/users/${userId}/following.json` : `/api/users/${userId}/followers.json`;
-      const res = await apiClient.get(endpoint);
+      const res = await api.get(endpoint);
       setUserList(res.data);
       setListTitle(type === "following" ? "フォロー中" : "フォロワー");
       setShowListModal(true);
-    } catch (err) { alert("リストの取得に失敗しました。"); }
+    } catch (err) { alert(getApiErrorMessage(err, "リストの取得に失敗しました。")); }
   };
 
   const deletePost = async (id) => {
     if (!window.confirm("この投稿を削除しますか？")) return;
     try {
-      await apiClient.delete(`/api/posts/${id}.json`);
+      await api.delete(`/api/posts/${id}.json`);
       fetchPosts();
-    } catch (error) { alert("削除に失敗しました"); }
+    } catch (error) { alert(getApiErrorMessage(error, "削除に失敗しました。")); }
   };
 
   const toggleFollow = async (targetUserId, isFollowing) => {
     try {
       if (isFollowing) {
-        await apiClient.delete(`/api/relationships/${targetUserId}.json`);
+        await api.delete(`/api/relationships/${targetUserId}.json`);
       } else {
-        await apiClient.post("/api/relationships.json", { followed_id: targetUserId });
+        await api.post("/api/relationships.json", { followed_id: targetUserId });
       }
       fetchPosts();
       if (showListModal) {
         setUserList(prev => prev.map(u => u.id === targetUserId ? { ...u, is_followed_by_me: !isFollowing } : u));
       }
-    } catch (err) { alert("フォロー操作に失敗しました。"); }
+    } catch (err) { alert(getApiErrorMessage(err, "フォロー操作に失敗しました。")); }
   };
 
   const handleUpdateProfile = async () => {
@@ -108,7 +100,7 @@ function App() {
       formData.append("user[account_id]", editAccountId);
       formData.append("user[bio]", editBio);
       if (editAvatarFile) { formData.append("user[avatar]", editAvatarFile); }
-      const res = await apiClient.put("/api/profile.json", formData);
+      const res = await api.put("/api/profile.json", formData);
       const u = res.data;
       setUsername(u.username || "");
       setAccountId(u.account_id || u.accountId || "");
@@ -122,7 +114,7 @@ function App() {
       setAvatarPreview(null);
       setEditAvatarFile(null);
       fetchPosts();
-    } catch (err) { alert("更新に失敗しました。"); }
+    } catch (err) { alert(getApiErrorMessage(err, "更新に失敗しました。")); }
   };
 
   // --- モーダル ---
@@ -169,13 +161,13 @@ function App() {
     const handleRepost = async () => {
       if (isReposted) return;
       try {
-        await apiClient.post("/api/posts.json", { post: { content: "", repost_id: post.id } });
+        await api.post("/api/posts.json", { post: { content: "", repost_id: post.id } });
         fetchPosts();
       } catch (err) { 
-        if (err.response?.status === 422) {
-          alert("既にリポスト済みです");
+        if (err.status === 422) {
+          alert(getApiErrorMessage(err, "既にリポスト済みです"));
         } else {
-          alert("リポストに失敗しました"); 
+          alert(getApiErrorMessage(err, "リポストに失敗しました。"));
         }
       }
     };
@@ -183,21 +175,21 @@ function App() {
     const toggleLike = async () => {
       try {
         if (isLiked) {
-          await apiClient.delete(`/api/posts/${post.id}/like.json`);
+          await api.delete(`/api/posts/${post.id}/like.json`);
         } else {
-          await apiClient.post(`/api/posts/${post.id}/like.json`);
+          await api.post(`/api/posts/${post.id}/like.json`);
         }
         fetchPosts();
-      } catch (err) { console.error("Like error:", err); }
+      } catch (err) { console.error("Like error:", getApiErrorMessage(err)); }
     };
 
     const submitComment = async () => {
       if (!commentContent) return;
       try {
-        await apiClient.post(`/api/posts/${post.id}/comments.json`, { comment: { content: commentContent } });
+        await api.post(`/api/posts/${post.id}/comments.json`, { comment: { content: commentContent } });
         setCommentContent("");
         fetchPosts();
-      } catch (err) { alert("リプライの送信に失敗しました"); }
+      } catch (err) { alert(getApiErrorMessage(err, "リプライの送信に失敗しました。")); }
     };
 
     return (
@@ -305,7 +297,7 @@ function App() {
           const endpoint = isSignup ? "/users.json" : "/users/sign_in.json";
           try {
             const payload = isSignup ? { user: { email, password, username, account_id: accountId } } : { user: { email, password } };
-            const res = await axios.post(`${API_BASE_URL}${endpoint}`, payload);
+            const res = await api.post(endpoint, payload);
             const newToken = res.headers['authorization']?.split(' ')[1] || res.data?.token;
             if (newToken) {
               localStorage.setItem("token", newToken); setToken(newToken);
@@ -314,7 +306,7 @@ function App() {
               localStorage.setItem("username", u.username || ""); localStorage.setItem("accountId", u.account_id || u.accountId || ""); localStorage.setItem("avatarUrl", u.avatar_url || u.avatarUrl || ""); localStorage.setItem("bio", u.bio || "");
               setView("home");
             }
-          } catch (error) { alert("認証に失敗しました。"); }
+          } catch (error) { alert(getApiErrorMessage(error, "認証に失敗しました。")); }
         }} className="w-full max-w-sm space-y-4 border border-gray-800 p-10 rounded-3xl bg-[#16181c]/50">
           <h2 className="text-4xl font-black text-center mb-8 italic text-white">SNS</h2>
           {isSignup && (
@@ -363,8 +355,12 @@ function App() {
                   <textarea className="w-full bg-transparent text-xl outline-none resize-none min-h-[100px]" placeholder="いまどうしてる？" value={content} onChange={e => setContent(e.target.value)} />
                   <div className="flex justify-end mt-2 pt-3 border-t border-gray-900">
                     <button disabled={content.length === 0} onClick={async () => {
-                      await apiClient.post("/api/posts.json", { post: { content } });
-                      setContent(""); fetchPosts();
+                      try {
+                        await api.post("/api/posts.json", { post: { content } });
+                        setContent(""); fetchPosts();
+                      } catch (err) {
+                        alert(getApiErrorMessage(err, "投稿に失敗しました。"));
+                      }
                     }} className="bg-[#1d9bf0] px-6 py-2 rounded-full font-bold disabled:opacity-50 hover:bg-[#1a8cd8]">投稿する</button>
                   </div>
                 </div>
