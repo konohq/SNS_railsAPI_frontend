@@ -3,6 +3,17 @@ import axios from "axios";
 export const API_BASE_URL = "http://localhost:3000";
 
 const DEFAULT_ERROR_MESSAGE = "通信に失敗しました。時間をおいて再度お試しください。";
+const AUTH_STORAGE_KEYS = [
+  "token",
+  "username",
+  "accountId",
+  "avatarUrl",
+  "bio",
+  "followingCount",
+  "followersCount"
+];
+
+let unauthorizedHandler = null;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -11,6 +22,20 @@ const api = axios.create({
     "Content-Type": "application/json"
   }
 });
+
+export const clearAuthSession = () => {
+  AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+};
+
+export const setUnauthorizedHandler = (handler) => {
+  unauthorizedHandler = handler;
+
+  return () => {
+    if (unauthorizedHandler === handler) {
+      unauthorizedHandler = null;
+    }
+  };
+};
 
 const isNormalizedApiError = (error) => (
   error &&
@@ -90,6 +115,7 @@ export const getApiErrorMessage = (error, fallbackMessage) => {
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
 
+  config.headers = config.headers || {};
   config.headers.Accept = "application/json";
 
   if (typeof FormData !== "undefined" && config.data instanceof FormData) {
@@ -109,7 +135,16 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => Promise.reject(normalizeApiError(error))
+  (error) => {
+    const normalizedError = normalizeApiError(error);
+
+    if (error?.response?.status === 401) {
+      clearAuthSession();
+      unauthorizedHandler?.(normalizedError);
+    }
+
+    return Promise.reject(normalizedError);
+  }
 );
 
 export default api;

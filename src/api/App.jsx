@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api, { API_BASE_URL, getApiErrorMessage } from "./client";
+import { useAuth } from "./auth";
 
 const MAX_CHARS = 140;
 
 function App() {
+  const { login, logout, token } = useAuth();
   const [posts, setPosts] = useState([]);
   const [content, setContent] = useState("");
-  const [token, setToken] = useState(localStorage.getItem("token"));
   const [isSignup, setIsSignup] = useState(false);
   const [view, setView] = useState("home");
 
@@ -38,6 +39,27 @@ function App() {
     return `${API_BASE_URL}${path}`;
   };
 
+  const resetUserState = useCallback(() => {
+    setPosts([]);
+    setContent("");
+    setUsername("");
+    setAccountId("");
+    setAvatarUrl("");
+    setBio("");
+    setFollowingCount(0);
+    setFollowersCount(0);
+    setUserList([]);
+    setListTitle("");
+    setShowListModal(false);
+    setIsEditingProfile(false);
+    setEditUsername("");
+    setEditAccountId("");
+    setEditBio("");
+    setEditAvatarFile(null);
+    setAvatarPreview(null);
+    setView("home");
+  }, []);
+
   const fetchPosts = useCallback(async () => {
     try {
       const response = await api.get("/api/posts.json");
@@ -57,6 +79,12 @@ function App() {
   useEffect(() => {
     if (token) fetchPosts();
   }, [token, fetchPosts]);
+
+  useEffect(() => {
+    if (!token) {
+      resetUserState();
+    }
+  }, [token, resetUserState]);
 
   const fetchUserList = async (type) => {
     try {
@@ -300,7 +328,7 @@ function App() {
             const res = await api.post(endpoint, payload);
             const newToken = res.headers['authorization']?.split(' ')[1] || res.data?.token;
             if (newToken) {
-              localStorage.setItem("token", newToken); setToken(newToken);
+              login(newToken);
               const u = res.data.user || res.data;
               setUsername(u.username || ""); setAccountId(u.account_id || u.accountId || ""); setAvatarUrl(u.avatar_url || u.avatarUrl || ""); setBio(u.bio || "");
               localStorage.setItem("username", u.username || ""); localStorage.setItem("accountId", u.account_id || u.accountId || ""); localStorage.setItem("avatarUrl", u.avatar_url || u.avatarUrl || ""); localStorage.setItem("bio", u.bio || "");
@@ -335,7 +363,7 @@ function App() {
             <button onClick={() => setView("home")} className={`w-full text-left p-3 rounded-full text-xl hover:bg-white/10 flex items-center gap-4 ${view === "home" ? "font-bold" : ""}`}><i className="fa-solid fa-house"></i>ホーム</button>
             <button onClick={() => { setView("profile"); setIsEditingProfile(false); }} className={`w-full text-left p-3 rounded-full text-xl hover:bg-white/10 flex items-center gap-4 ${view === "profile" ? "font-bold" : ""}`}><i className="fa-solid fa-user"></i>プロフィール</button>
           </div>
-          <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="p-3 hover:bg-white/10 rounded-full text-gray-500 mb-4 font-bold flex items-center gap-2"><i className="fa-solid fa-right-from-bracket"></i>ログアウト</button>
+          <button onClick={logout} className="p-3 hover:bg-white/10 rounded-full text-gray-500 mb-4 font-bold flex items-center gap-2"><i className="fa-solid fa-right-from-bracket"></i>ログアウト</button>
         </aside>
 
         {/* メインコンテンツ */}

@@ -1,7 +1,9 @@
 import { useState } from "react";
 import api, { getApiErrorMessage } from "./client";
+import { useAuth } from "./auth";
 
 const Login = () => {
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -14,7 +16,7 @@ const Login = () => {
 
       const token = response.headers.authorization;
       if (token) {
-        localStorage.setItem("token", token);
+        login(token);
         window.location.href = "/";
       }
     } catch (error) {
