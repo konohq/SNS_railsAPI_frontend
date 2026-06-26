@@ -8,6 +8,7 @@ import api, {
 import { useAuth } from "./auth";
 import { usePosts } from "./usePosts";
 import PostItem from "../components/PostItem";
+import UserListModal from "../components/UserListModal";
 
 const MAX_CHARS = 140;
 
@@ -113,7 +114,11 @@ function App() {
     await deletePostApi(id, { fallbackMessage: "削除に失敗しました。" });
   }, [deletePostApi]);
 
-  const toggleFollow = async (targetUserId, isFollowing) => {
+  const closeUserListModal = useCallback(() => {
+    setShowListModal(false);
+  }, []);
+
+  const toggleFollow = useCallback(async (targetUserId, isFollowing) => {
     try {
       if (isFollowing) {
         await api.delete(`/api/relationships/${targetUserId}.json`);
@@ -125,7 +130,7 @@ function App() {
         setUserList(prev => prev.map(u => u.id === targetUserId ? { ...u, is_followed_by_me: !isFollowing } : u));
       }
     } catch (err) { alertApiError(err, "フォロー操作に失敗しました。"); }
-  };
+  }, [alertApiError, fetchPosts, showListModal]);
 
   const handleUpdateProfile = async () => {
     try {
@@ -150,40 +155,6 @@ function App() {
       fetchPosts();
     } catch (err) { alertApiError(err, "更新に失敗しました。"); }
   };
-
-  // --- モーダル ---
-  const renderUserListModal = () => (
-    <div className="fixed inset-0 bg-white/10 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowListModal(false)}>
-      <div className="bg-black border border-gray-800 w-full max-w-md rounded-2xl max-h-[70vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-black">
-          <h3 className="font-bold text-xl">{listTitle}</h3>
-          <button onClick={() => setShowListModal(false)} className="text-gray-400 hover:text-white text-2xl">&times;</button>
-        </div>
-        <div className="overflow-y-auto flex-grow divide-y divide-gray-900">
-          {userList.length === 0 ? <p className="p-10 text-center text-gray-500">まだ誰もいません</p> :
-            userList.map(user => (
-              <div key={user.id} className="p-4 flex items-center justify-between">
-                <div className="flex gap-3 items-center">
-                  <div className="w-10 h-10 rounded-full bg-gray-700 overflow-hidden">
-                    {(user.avatarUrl || user.avatar_url) && <img src={getFullUrl(user.avatarUrl || user.avatar_url)} className="w-full h-full object-cover" alt="" />}
-                  </div>
-                  <div>
-                    <div className="font-bold">{user.username}</div>
-                    <div className="text-gray-500 text-sm">@{user.account_id || user.accountId}</div>
-                  </div>
-                </div>
-                {(user.account_id !== accountId && user.accountId !== accountId) && (
-                  <button onClick={() => toggleFollow(user.id, user.is_followed_by_me)} className={`px-4 py-1 rounded-full text-xs font-bold border transition ${user.is_followed_by_me ? "border-gray-600 text-white" : "bg-white text-black"}`}>
-                    {user.is_followed_by_me ? "フォロー中" : "フォロー"}
-                  </button>
-                )}
-              </div>
-            ))
-          }
-        </div>
-      </div>
-    </div>
-  );
 
   // --- 未ログイン時 ---
   if (!token) {
@@ -224,7 +195,15 @@ function App() {
   // --- ログイン後メインUI ---
   return (
     <div className="min-h-screen bg-black text-white flex justify-center">
-      {showListModal && renderUserListModal()}
+      <UserListModal
+        accountId={accountId}
+        getFullUrl={getFullUrl}
+        isOpen={showListModal}
+        onClose={closeUserListModal}
+        onToggleFollow={toggleFollow}
+        title={listTitle}
+        users={userList}
+      />
       <div className="max-w-[1200px] w-full flex">
         {/* 左サイドバー */}
         <aside className="w-[240px] sticky top-0 h-screen p-4 flex flex-col justify-between border-r border-gray-800">
