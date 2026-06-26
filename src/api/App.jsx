@@ -20,6 +20,7 @@ function App() {
   const [profileViewKey, setProfileViewKey] = useState(0);
 
   // --- ユーザー情報 ---
+  const [userId, setUserId] = useState(localStorage.getItem("userId") || "");
   const [username, setUsername] = useState(localStorage.getItem("username") || "");
   const [accountId, setAccountId] = useState(localStorage.getItem("accountId") || "");
   const [avatarUrl, setAvatarUrl] = useState(localStorage.getItem("avatarUrl") || "");
@@ -35,6 +36,7 @@ function App() {
   }, []);
 
   const syncCurrentUserFromPost = useCallback((user) => {
+    if (user.id !== undefined) setUserId(String(user.id));
     setFollowingCount(user.followingCount);
     setFollowersCount(user.followersCount);
     if (user.bio !== undefined) setBio(user.bio);
@@ -68,13 +70,13 @@ function App() {
     toggleFollow,
     userList
   } = useUserList({
-    accountId,
+    currentUserId: userId,
     fetchPosts,
-    onApiError: alertApiError,
-    posts
+    onApiError: alertApiError
   });
 
   const resetUserState = useCallback(() => {
+    setUserId("");
     setUsername("");
     setAccountId("");
     setAvatarUrl("");
@@ -87,11 +89,15 @@ function App() {
   }, [resetUserList]);
 
   const handleAuthSuccess = useCallback(({ token: newToken, user }) => {
+    const nextUserId = user.id ?? user.user_id ?? user.userId ?? "";
+
     login(newToken);
+    setUserId(nextUserId ? String(nextUserId) : "");
     setUsername(user.username || "");
     setAccountId(user.account_id || user.accountId || "");
     setAvatarUrl(user.avatar_url || user.avatarUrl || "");
     setBio(user.bio || "");
+    localStorage.setItem("userId", nextUserId ? String(nextUserId) : "");
     localStorage.setItem("username", user.username || "");
     localStorage.setItem("accountId", user.account_id || user.accountId || "");
     localStorage.setItem("avatarUrl", user.avatar_url || user.avatarUrl || "");
@@ -100,6 +106,13 @@ function App() {
   }, [login]);
 
   const handleProfileUpdated = useCallback((user) => {
+    const nextUserId = user.id ?? user.user_id ?? user.userId;
+
+    if (nextUserId !== undefined) {
+      setUserId(String(nextUserId));
+      localStorage.setItem("userId", String(nextUserId));
+    }
+
     setUsername(user.username || "");
     setAccountId(user.account_id || user.accountId || "");
     setAvatarUrl(user.avatar_url || user.avatarUrl || "");
