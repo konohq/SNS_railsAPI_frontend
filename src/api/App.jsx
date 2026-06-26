@@ -6,13 +6,12 @@ import api, {
   isUnauthorizedError
 } from "./client";
 import { useAuth } from "./auth";
+import { usePosts } from "./usePosts";
 
 const MAX_CHARS = 140;
 
 function App() {
   const { login, logout, token } = useAuth();
-  const [posts, setPosts] = useState([]);
-  const [content, setContent] = useState("");
   const [isSignup, setIsSignup] = useState(false);
   const [view, setView] = useState("home");
 
@@ -44,9 +43,26 @@ function App() {
     return `${API_BASE_URL}${path}`;
   };
 
+  const syncCurrentUserFromPost = useCallback((user) => {
+    setFollowingCount(user.followingCount);
+    setFollowersCount(user.followersCount);
+    if (user.bio !== undefined) setBio(user.bio);
+  }, []);
+
+  const {
+    content,
+    createPost,
+    deletePost: deletePostApi,
+    fetchPosts,
+    posts,
+    setContent
+  } = usePosts({
+    accountId,
+    onCurrentUserChange: syncCurrentUserFromPost,
+    token
+  });
+
   const resetUserState = useCallback(() => {
-    setPosts([]);
-    setContent("");
     setUsername("");
     setAccountId("");
     setAvatarUrl("");
@@ -71,30 +87,6 @@ function App() {
     alert(getApiErrorMessage(error, fallbackMessage));
   }, []);
 
-  const fetchPosts = useCallback(async () => {
-    try {
-      const response = await api.get("/api/posts.json");
-      if (Array.isArray(response.data)) {
-        setPosts(response.data);
-        const myData = response.data.find(p => (p.user?.account_id === accountId || p.user?.accountId === accountId));
-        if (myData) {
-          const u = myData.user;
-          setFollowingCount(u.following_count ?? 0);
-          setFollowersCount(u.followers_count ?? 0);
-          if (u.bio !== undefined) setBio(u.bio);
-        }
-      }
-    } catch (error) {
-      if (!isUnauthorizedError(error)) {
-        console.error(error);
-      }
-    }
-  }, [accountId]);
-
-  useEffect(() => {
-    if (token) fetchPosts();
-  }, [token, fetchPosts]);
-
   useEffect(() => {
     if (!token) {
       resetUserState();
@@ -116,10 +108,7 @@ function App() {
 
   const deletePost = async (id) => {
     if (!window.confirm("この投稿を削除しますか？")) return;
-    try {
-      await api.delete(`/api/posts/${id}.json`);
-      fetchPosts();
-    } catch (error) { alertApiError(error, "削除に失敗しました。"); }
+    await deletePostApi(id, { fallbackMessage: "削除に失敗しました。" });
   };
 
   const toggleFollow = async (targetUserId, isFollowing) => {
@@ -204,8 +193,10 @@ function App() {
     const handleRepost = async () => {
       if (isReposted) return;
       try {
-        await api.post("/api/posts.json", { post: { content: "", repost_id: post.id } });
-        fetchPosts();
+        await createPost(
+          { content: "", repost_id: post.id },
+          { alertUser: false, rethrow: true }
+        );
       } catch (err) { 
         if (isUnauthorizedError(err)) {
           return;
@@ -406,12 +397,10 @@ function App() {
                   <textarea className="w-full bg-transparent text-xl outline-none resize-none min-h-[100px]" placeholder="いまどうしてる？" value={content} onChange={e => setContent(e.target.value)} />
                   <div className="flex justify-end mt-2 pt-3 border-t border-gray-900">
                     <button disabled={content.length === 0} onClick={async () => {
-                      try {
-                        await api.post("/api/posts.json", { post: { content } });
-                        setContent(""); fetchPosts();
-                      } catch (err) {
-                        alertApiError(err, "投稿に失敗しました。");
-                      }
+                      await createPost(
+                        { content },
+                        { fallbackMessage: "投稿に失敗しました。", resetContent: true }
+                      );
                     }} className="bg-[#1d9bf0] px-6 py-2 rounded-full font-bold disabled:opacity-50 hover:bg-[#1a8cd8]">投稿する</button>
                   </div>
                 </div>
