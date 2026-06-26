@@ -71,12 +71,15 @@ API通信には別途 Rails API サーバーの起動が必要です。
 
 ## 環境変数
 
-現時点では API URL は `src/api/client.js` で管理しています。
-デプロイ時は以下のような環境変数管理へ移行予定です。
+APIサーバーのURLは `VITE_API_BASE_URL` で指定します。
+未設定の場合は開発用として `http://localhost:3000` が使われます。
 
 ```env
 VITE_API_BASE_URL=http://localhost:3000
 ```
+
+`VITE_API_BASE_URL` には `/api` などのパスを含めず、APIサーバーの origin のみを指定してください。
+各APIのパスはフロントエンド側で `/api/posts.json` のように組み立てています。
 
 `.env` と `.env.*` は Git 管理から除外し、共有用のサンプルが必要な場合は `.env.example` を使用します。
 
@@ -91,7 +94,6 @@ npm run preview
 
 ## 今後の改善予定
 
-- API URL の環境変数化
 - フロントエンドCIの追加
 - コンポーネント / Custom Hooks のテスト追加
 - ローディング表示と空状態表示の改善

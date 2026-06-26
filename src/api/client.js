@@ -1,6 +1,8 @@
 import axios from "axios";
 
-export const API_BASE_URL = "http://localhost:3000";
+const DEFAULT_API_BASE_URL = "http://localhost:3000";
+
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
 
 const DEFAULT_ERROR_MESSAGE = "通信に失敗しました。時間をおいて再度お試しください。";
 const AUTH_STORAGE_KEYS = [
