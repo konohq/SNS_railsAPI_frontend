@@ -8,6 +8,7 @@ import { useAuth } from "./auth";
 import { usePosts } from "./usePosts";
 import AuthForm from "../components/AuthForm";
 import PostItem from "../components/PostItem";
+import ProfileView from "../components/ProfileView";
 import UserListModal from "../components/UserListModal";
 
 const MAX_CHARS = 140;
@@ -15,6 +16,7 @@ const MAX_CHARS = 140;
 function App() {
   const { login, logout, token } = useAuth();
   const [view, setView] = useState("home");
+  const [profileViewKey, setProfileViewKey] = useState(0);
 
   // --- ユーザー情報 ---
   const [username, setUsername] = useState(localStorage.getItem("username") || "");
@@ -28,13 +30,6 @@ function App() {
   const [userList, setUserList] = useState([]);
   const [listTitle, setListTitle] = useState("");
   const [showListModal, setShowListModal] = useState(false);
-
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [editUsername, setEditUsername] = useState("");
-  const [editAccountId, setEditAccountId] = useState("");
-  const [editBio, setEditBio] = useState("");
-  const [editAvatarFile, setEditAvatarFile] = useState(null);
-  const [avatarPreview, setAvatarPreview] = useState(null);
 
   const getFullUrl = useCallback((path) => {
     if (!path || path === "null" || path === "undefined") return null;
@@ -71,13 +66,8 @@ function App() {
     setUserList([]);
     setListTitle("");
     setShowListModal(false);
-    setIsEditingProfile(false);
-    setEditUsername("");
-    setEditAccountId("");
-    setEditBio("");
-    setEditAvatarFile(null);
-    setAvatarPreview(null);
     setView("home");
+    setProfileViewKey(0);
   }, []);
 
   const alertApiError = useCallback((error, fallbackMessage) => {
@@ -98,6 +88,22 @@ function App() {
     localStorage.setItem("bio", user.bio || "");
     setView("home");
   }, [login]);
+
+  const handleProfileUpdated = useCallback((user) => {
+    setUsername(user.username || "");
+    setAccountId(user.account_id || user.accountId || "");
+    setAvatarUrl(user.avatar_url || user.avatarUrl || "");
+    setBio(user.bio || "");
+    localStorage.setItem("username", user.username || "");
+    localStorage.setItem("accountId", user.account_id || user.accountId || "");
+    localStorage.setItem("avatarUrl", user.avatar_url || user.avatarUrl || "");
+    localStorage.setItem("bio", user.bio || "");
+  }, []);
+
+  const showProfileView = useCallback(() => {
+    setView("profile");
+    setProfileViewKey(prev => prev + 1);
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -142,30 +148,6 @@ function App() {
     } catch (err) { alertApiError(err, "フォロー操作に失敗しました。"); }
   }, [alertApiError, fetchPosts, showListModal]);
 
-  const handleUpdateProfile = async () => {
-    try {
-      const formData = new FormData();
-      formData.append("user[username]", editUsername);
-      formData.append("user[account_id]", editAccountId);
-      formData.append("user[bio]", editBio);
-      if (editAvatarFile) { formData.append("user[avatar]", editAvatarFile); }
-      const res = await api.put("/api/profile.json", formData);
-      const u = res.data;
-      setUsername(u.username || "");
-      setAccountId(u.account_id || u.accountId || "");
-      setAvatarUrl(u.avatar_url || u.avatarUrl || "");
-      setBio(u.bio || "");
-      localStorage.setItem("username", u.username || "");
-      localStorage.setItem("accountId", u.account_id || u.accountId || "");
-      localStorage.setItem("avatarUrl", u.avatar_url || u.avatarUrl || "");
-      localStorage.setItem("bio", u.bio || "");
-      setIsEditingProfile(false);
-      setAvatarPreview(null);
-      setEditAvatarFile(null);
-      fetchPosts();
-    } catch (err) { alertApiError(err, "更新に失敗しました。"); }
-  };
-
   // --- 未ログイン時 ---
   if (!token) {
     return <AuthForm onAuthSuccess={handleAuthSuccess} />;
@@ -188,7 +170,7 @@ function App() {
         <aside className="w-[240px] sticky top-0 h-screen p-4 flex flex-col justify-between border-r border-gray-800">
           <div className="space-y-4 pt-4 text-left">
             <button onClick={() => setView("home")} className={`w-full text-left p-3 rounded-full text-xl hover:bg-white/10 flex items-center gap-4 ${view === "home" ? "font-bold" : ""}`}><i className="fa-solid fa-house"></i>ホーム</button>
-            <button onClick={() => { setView("profile"); setIsEditingProfile(false); }} className={`w-full text-left p-3 rounded-full text-xl hover:bg-white/10 flex items-center gap-4 ${view === "profile" ? "font-bold" : ""}`}><i className="fa-solid fa-user"></i>プロフィール</button>
+            <button onClick={showProfileView} className={`w-full text-left p-3 rounded-full text-xl hover:bg-white/10 flex items-center gap-4 ${view === "profile" ? "font-bold" : ""}`}><i className="fa-solid fa-user"></i>プロフィール</button>
           </div>
           <button onClick={logout} className="p-3 hover:bg-white/10 rounded-full text-gray-500 mb-4 font-bold flex items-center gap-2"><i className="fa-solid fa-right-from-bracket"></i>ログアウト</button>
         </aside>
@@ -233,41 +215,20 @@ function App() {
             </>
           ) : (
             <>
-              {/* プロフィール詳細 */}
-              <div className="border-b border-gray-800 pb-4 text-left">
-                <div className="h-32 bg-[#2f3336]"></div>
-                <div className="px-4 flex justify-between items-end relative">
-                  <div className="w-32 h-32 rounded-full bg-gray-700 overflow-hidden border-4 border-black -mt-16 z-10 shadow-lg bg-black">
-                    {(avatarPreview || avatarUrl) && <img src={avatarPreview || getFullUrl(avatarUrl)} className="w-full h-full object-cover" alt="profile" />}
-                  </div>
-                  {!isEditingProfile && <button onClick={() => { setEditUsername(username); setEditAccountId(accountId); setEditBio(bio); setIsEditingProfile(true); }} className="mb-2 border border-gray-600 px-4 py-1.5 rounded-full font-bold hover:bg-white/10 transition text-white">編集</button>}
-                </div>
-                {isEditingProfile ? (
-                  <div className="mt-4 px-4 space-y-4">
-                    <input className="w-full bg-black border border-gray-700 p-2 rounded outline-none focus:border-[#1d9bf0]" value={editUsername} onChange={e => setEditUsername(e.target.value)} placeholder="表示名" />
-                    <input className="w-full bg-black border border-gray-700 p-2 rounded outline-none focus:border-[#1d9bf0]" value={editAccountId} onChange={e => setEditAccountId(e.target.value)} placeholder="ユーザーID" />
-                    <textarea className="w-full bg-black border border-gray-700 p-2 rounded outline-none h-24 resize-none focus:border-[#1d9bf0]" value={editBio} onChange={e => setEditBio(e.target.value)} placeholder="自己紹介" />
-                    <label className="inline-block bg-white text-black px-4 py-2 rounded-full font-bold text-sm cursor-pointer hover:bg-gray-200">
-                      画像を変更
-                      <input type="file" className="hidden" accept="image/*" onChange={e => { const f = e.target.files[0]; if (f) { setEditAvatarFile(f); setAvatarPreview(URL.createObjectURL(f)); } }} />
-                    </label>
-                    <div className="flex gap-2">
-                      <button onClick={handleUpdateProfile} className="bg-[#1d9bf0] text-white px-4 py-2 rounded-full font-bold flex-1">保存</button>
-                      <button onClick={() => { setIsEditingProfile(false); setAvatarPreview(null); }} className="border border-gray-600 px-4 py-2 rounded-full flex-1 text-white hover:bg-white/5">キャンセル</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-4 px-4">
-                    <h2 className="text-2xl font-extrabold text-white">{username}</h2>
-                    <p className="text-gray-500 text-lg">@{accountId}</p>
-                    <div className="flex gap-5 mt-3 text-sm">
-                      <div onClick={() => fetchUserList("following")} className="flex gap-1 hover:underline cursor-pointer"><span className="font-bold text-white">{followingCount}</span><span className="text-gray-500">フォロー中</span></div>
-                      <div onClick={() => fetchUserList("followers")} className="flex gap-1 hover:underline cursor-pointer"><span className="font-bold text-white">{followersCount}</span><span className="text-gray-500">フォロワー</span></div>
-                    </div>
-                    <p className="mt-3 text-gray-200 whitespace-pre-wrap">{bio || "自己紹介がありません"}</p>
-                  </div>
-                )}
-              </div>
+              <ProfileView
+                key={profileViewKey}
+                accountId={accountId}
+                avatarUrl={avatarUrl}
+                bio={bio}
+                fetchPosts={fetchPosts}
+                followersCount={followersCount}
+                followingCount={followingCount}
+                getFullUrl={getFullUrl}
+                onApiError={alertApiError}
+                onProfileUpdated={handleProfileUpdated}
+                onShowUserList={fetchUserList}
+                username={username}
+              />
               <div className="divide-y divide-gray-800">{posts.filter(p => (p.user?.accountId === accountId || p.user?.account_id === accountId)).map(p => (
                 <PostItem
                   key={p.id}
