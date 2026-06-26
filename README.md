@@ -13,6 +13,7 @@ Rails API と連携し、ログイン、投稿、いいね、コメント、リ�
 
 ## 使用技術
 
+- Node.js 22.x
 - React 19
 - Vite
 - Tailwind CSS
@@ -60,6 +61,8 @@ src/
 ```
 
 ## セットアップ方法
+
+Node.js 22.x を使用してください。
 
 ```bash
 npm install
