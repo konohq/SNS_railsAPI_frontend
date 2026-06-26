@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
-import api, {
+import {
   API_BASE_URL,
   getApiErrorMessage,
   isUnauthorizedError
 } from "./client";
 import { useAuth } from "./auth";
 import { usePosts } from "./usePosts";
+import { useUserList } from "./useUserList";
 import AuthForm from "../components/AuthForm";
 import PostItem from "../components/PostItem";
 import ProfileView from "../components/ProfileView";
@@ -27,10 +28,6 @@ function App() {
   const [followingCount, setFollowingCount] = useState(Number(localStorage.getItem("followingCount")) || 0);
   const [followersCount, setFollowersCount] = useState(Number(localStorage.getItem("followersCount")) || 0);
 
-  const [userList, setUserList] = useState([]);
-  const [listTitle, setListTitle] = useState("");
-  const [showListModal, setShowListModal] = useState(false);
-
   const getFullUrl = useCallback((path) => {
     if (!path || path === "null" || path === "undefined") return null;
     if (path.startsWith("http") || path.startsWith("blob:")) return path;
@@ -41,6 +38,12 @@ function App() {
     setFollowingCount(user.followingCount);
     setFollowersCount(user.followersCount);
     if (user.bio !== undefined) setBio(user.bio);
+  }, []);
+
+  const alertApiError = useCallback((error, fallbackMessage) => {
+    if (isUnauthorizedError(error)) return;
+
+    alert(getApiErrorMessage(error, fallbackMessage));
   }, []);
 
   const {
@@ -56,6 +59,21 @@ function App() {
     token
   });
 
+  const {
+    closeUserListModal,
+    fetchUserList,
+    listTitle,
+    resetUserList,
+    showListModal,
+    toggleFollow,
+    userList
+  } = useUserList({
+    accountId,
+    fetchPosts,
+    onApiError: alertApiError,
+    posts
+  });
+
   const resetUserState = useCallback(() => {
     setUsername("");
     setAccountId("");
@@ -63,18 +81,10 @@ function App() {
     setBio("");
     setFollowingCount(0);
     setFollowersCount(0);
-    setUserList([]);
-    setListTitle("");
-    setShowListModal(false);
+    resetUserList();
     setView("home");
     setProfileViewKey(0);
-  }, []);
-
-  const alertApiError = useCallback((error, fallbackMessage) => {
-    if (isUnauthorizedError(error)) return;
-
-    alert(getApiErrorMessage(error, fallbackMessage));
-  }, []);
+  }, [resetUserList]);
 
   const handleAuthSuccess = useCallback(({ token: newToken, user }) => {
     login(newToken);
@@ -112,41 +122,10 @@ function App() {
     }
   }, [token, resetUserState]);
 
-  const fetchUserList = async (type) => {
-    try {
-      const myPost = posts.find(p => (p.user?.account_id === accountId || p.user?.accountId === accountId));
-      if (!myPost) { alert("ユーザー情報の取得に失敗しました。"); return; }
-      const userId = myPost.user.id;
-      const endpoint = type === "following" ? `/api/users/${userId}/following.json` : `/api/users/${userId}/followers.json`;
-      const res = await api.get(endpoint);
-      setUserList(res.data);
-      setListTitle(type === "following" ? "フォロー中" : "フォロワー");
-      setShowListModal(true);
-    } catch (err) { alertApiError(err, "リストの取得に失敗しました。"); }
-  };
-
   const deletePost = useCallback(async (id) => {
     if (!window.confirm("この投稿を削除しますか？")) return;
     await deletePostApi(id, { fallbackMessage: "削除に失敗しました。" });
   }, [deletePostApi]);
-
-  const closeUserListModal = useCallback(() => {
-    setShowListModal(false);
-  }, []);
-
-  const toggleFollow = useCallback(async (targetUserId, isFollowing) => {
-    try {
-      if (isFollowing) {
-        await api.delete(`/api/relationships/${targetUserId}.json`);
-      } else {
-        await api.post("/api/relationships.json", { followed_id: targetUserId });
-      }
-      fetchPosts();
-      if (showListModal) {
-        setUserList(prev => prev.map(u => u.id === targetUserId ? { ...u, is_followed_by_me: !isFollowing } : u));
-      }
-    } catch (err) { alertApiError(err, "フォロー操作に失敗しました。"); }
-  }, [alertApiError, fetchPosts, showListModal]);
 
   // --- 未ログイン時 ---
   if (!token) {
