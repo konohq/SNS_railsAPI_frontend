@@ -1,5 +1,5 @@
 import { useState } from "react";
-import api, { getApiErrorMessage } from "./client";
+import api, { extractAuthToken, getApiErrorMessage } from "./client";
 import { useAuth } from "./auth";
 
 const Login = () => {
@@ -14,7 +14,7 @@ const Login = () => {
         user: { email, password }
       });
 
-      const token = response.headers.authorization;
+      const token = extractAuthToken(response.headers.authorization);
       if (token) {
         login(token);
         window.location.href = "/";

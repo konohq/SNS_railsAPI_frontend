@@ -12,6 +12,7 @@ const AUTH_STORAGE_KEYS = [
   "followingCount",
   "followersCount"
 ];
+const LOGIN_PATHS = new Set(["/users/sign_in", "/users/sign_in.json"]);
 
 let unauthorizedHandler = null;
 
@@ -35,6 +36,25 @@ export const setUnauthorizedHandler = (handler) => {
       unauthorizedHandler = null;
     }
   };
+};
+
+const getRequestPath = (config) => {
+  try {
+    return new URL(config?.url || "", config?.baseURL || API_BASE_URL).pathname;
+  } catch {
+    return config?.url || "";
+  }
+};
+
+const isLoginRequest = (config) => LOGIN_PATHS.has(getRequestPath(config));
+
+export const isUnauthorizedError = (error) => normalizeApiError(error).status === 401;
+
+export const extractAuthToken = (authorization) => {
+  if (!authorization) return null;
+
+  const token = String(authorization).trim().replace(/^Bearer\s+/i, "");
+  return token || null;
 };
 
 const isNormalizedApiError = (error) => (
@@ -124,7 +144,7 @@ api.interceptors.request.use((config) => {
     config.headers["Content-Type"] = "application/json";
   }
 
-  if (token) {
+  if (token && !isLoginRequest(config)) {
     config.headers.Authorization = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
   } else {
     delete config.headers.Authorization;
@@ -138,7 +158,7 @@ api.interceptors.response.use(
   (error) => {
     const normalizedError = normalizeApiError(error);
 
-    if (error?.response?.status === 401) {
+    if (error?.response?.status === 401 && !isLoginRequest(error.config)) {
       clearAuthSession();
       unauthorizedHandler?.(normalizedError);
     }

@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import api, { API_BASE_URL, getApiErrorMessage } from "./client";
+import api, {
+  API_BASE_URL,
+  extractAuthToken,
+  getApiErrorMessage,
+  isUnauthorizedError
+} from "./client";
 import { useAuth } from "./auth";
 
 const MAX_CHARS = 140;
@@ -60,6 +65,12 @@ function App() {
     setView("home");
   }, []);
 
+  const alertApiError = useCallback((error, fallbackMessage) => {
+    if (isUnauthorizedError(error)) return;
+
+    alert(getApiErrorMessage(error, fallbackMessage));
+  }, []);
+
   const fetchPosts = useCallback(async () => {
     try {
       const response = await api.get("/api/posts.json");
@@ -73,7 +84,11 @@ function App() {
           if (u.bio !== undefined) setBio(u.bio);
         }
       }
-    } catch (error) { console.error(error); }
+    } catch (error) {
+      if (!isUnauthorizedError(error)) {
+        console.error(error);
+      }
+    }
   }, [accountId]);
 
   useEffect(() => {
@@ -96,7 +111,7 @@ function App() {
       setUserList(res.data);
       setListTitle(type === "following" ? "フォロー中" : "フォロワー");
       setShowListModal(true);
-    } catch (err) { alert(getApiErrorMessage(err, "リストの取得に失敗しました。")); }
+    } catch (err) { alertApiError(err, "リストの取得に失敗しました。"); }
   };
 
   const deletePost = async (id) => {
@@ -104,7 +119,7 @@ function App() {
     try {
       await api.delete(`/api/posts/${id}.json`);
       fetchPosts();
-    } catch (error) { alert(getApiErrorMessage(error, "削除に失敗しました。")); }
+    } catch (error) { alertApiError(error, "削除に失敗しました。"); }
   };
 
   const toggleFollow = async (targetUserId, isFollowing) => {
@@ -118,7 +133,7 @@ function App() {
       if (showListModal) {
         setUserList(prev => prev.map(u => u.id === targetUserId ? { ...u, is_followed_by_me: !isFollowing } : u));
       }
-    } catch (err) { alert(getApiErrorMessage(err, "フォロー操作に失敗しました。")); }
+    } catch (err) { alertApiError(err, "フォロー操作に失敗しました。"); }
   };
 
   const handleUpdateProfile = async () => {
@@ -142,7 +157,7 @@ function App() {
       setAvatarPreview(null);
       setEditAvatarFile(null);
       fetchPosts();
-    } catch (err) { alert(getApiErrorMessage(err, "更新に失敗しました。")); }
+    } catch (err) { alertApiError(err, "更新に失敗しました。"); }
   };
 
   // --- モーダル ---
@@ -192,6 +207,10 @@ function App() {
         await api.post("/api/posts.json", { post: { content: "", repost_id: post.id } });
         fetchPosts();
       } catch (err) { 
+        if (isUnauthorizedError(err)) {
+          return;
+        }
+
         if (err.status === 422) {
           alert(getApiErrorMessage(err, "既にリポスト済みです"));
         } else {
@@ -208,7 +227,11 @@ function App() {
           await api.post(`/api/posts/${post.id}/like.json`);
         }
         fetchPosts();
-      } catch (err) { console.error("Like error:", getApiErrorMessage(err)); }
+      } catch (err) {
+        if (!isUnauthorizedError(err)) {
+          console.error("Like error:", getApiErrorMessage(err));
+        }
+      }
     };
 
     const submitComment = async () => {
@@ -217,7 +240,7 @@ function App() {
         await api.post(`/api/posts/${post.id}/comments.json`, { comment: { content: commentContent } });
         setCommentContent("");
         fetchPosts();
-      } catch (err) { alert(getApiErrorMessage(err, "リプライの送信に失敗しました。")); }
+      } catch (err) { alertApiError(err, "リプライの送信に失敗しました。"); }
     };
 
     return (
@@ -326,7 +349,7 @@ function App() {
           try {
             const payload = isSignup ? { user: { email, password, username, account_id: accountId } } : { user: { email, password } };
             const res = await api.post(endpoint, payload);
-            const newToken = res.headers['authorization']?.split(' ')[1] || res.data?.token;
+            const newToken = extractAuthToken(res.headers.authorization) || res.data?.token;
             if (newToken) {
               login(newToken);
               const u = res.data.user || res.data;
@@ -387,7 +410,7 @@ function App() {
                         await api.post("/api/posts.json", { post: { content } });
                         setContent(""); fetchPosts();
                       } catch (err) {
-                        alert(getApiErrorMessage(err, "投稿に失敗しました。"));
+                        alertApiError(err, "投稿に失敗しました。");
                       }
                     }} className="bg-[#1d9bf0] px-6 py-2 rounded-full font-bold disabled:opacity-50 hover:bg-[#1a8cd8]">投稿する</button>
                   </div>
