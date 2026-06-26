@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api, {
   API_BASE_URL,
-  extractAuthToken,
   getApiErrorMessage,
   isUnauthorizedError
 } from "./client";
 import { useAuth } from "./auth";
 import { usePosts } from "./usePosts";
+import AuthForm from "../components/AuthForm";
 import PostItem from "../components/PostItem";
 import UserListModal from "../components/UserListModal";
 
@@ -14,7 +14,6 @@ const MAX_CHARS = 140;
 
 function App() {
   const { login, logout, token } = useAuth();
-  const [isSignup, setIsSignup] = useState(false);
   const [view, setView] = useState("home");
 
   // --- ユーザー情報 ---
@@ -22,8 +21,6 @@ function App() {
   const [accountId, setAccountId] = useState(localStorage.getItem("accountId") || "");
   const [avatarUrl, setAvatarUrl] = useState(localStorage.getItem("avatarUrl") || "");
   const [bio, setBio] = useState(localStorage.getItem("bio") || "");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
   const [followingCount, setFollowingCount] = useState(Number(localStorage.getItem("followingCount")) || 0);
   const [followersCount, setFollowersCount] = useState(Number(localStorage.getItem("followersCount")) || 0);
@@ -88,6 +85,19 @@ function App() {
 
     alert(getApiErrorMessage(error, fallbackMessage));
   }, []);
+
+  const handleAuthSuccess = useCallback(({ token: newToken, user }) => {
+    login(newToken);
+    setUsername(user.username || "");
+    setAccountId(user.account_id || user.accountId || "");
+    setAvatarUrl(user.avatar_url || user.avatarUrl || "");
+    setBio(user.bio || "");
+    localStorage.setItem("username", user.username || "");
+    localStorage.setItem("accountId", user.account_id || user.accountId || "");
+    localStorage.setItem("avatarUrl", user.avatar_url || user.avatarUrl || "");
+    localStorage.setItem("bio", user.bio || "");
+    setView("home");
+  }, [login]);
 
   useEffect(() => {
     if (!token) {
@@ -158,38 +168,7 @@ function App() {
 
   // --- 未ログイン時 ---
   if (!token) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-        <form onSubmit={async (e) => {
-          e.preventDefault();
-          const endpoint = isSignup ? "/users.json" : "/users/sign_in.json";
-          try {
-            const payload = isSignup ? { user: { email, password, username, account_id: accountId } } : { user: { email, password } };
-            const res = await api.post(endpoint, payload);
-            const newToken = extractAuthToken(res.headers.authorization) || res.data?.token;
-            if (newToken) {
-              login(newToken);
-              const u = res.data.user || res.data;
-              setUsername(u.username || ""); setAccountId(u.account_id || u.accountId || ""); setAvatarUrl(u.avatar_url || u.avatarUrl || ""); setBio(u.bio || "");
-              localStorage.setItem("username", u.username || ""); localStorage.setItem("accountId", u.account_id || u.accountId || ""); localStorage.setItem("avatarUrl", u.avatar_url || u.avatarUrl || ""); localStorage.setItem("bio", u.bio || "");
-              setView("home");
-            }
-          } catch (error) { alert(getApiErrorMessage(error, "認証に失敗しました。")); }
-        }} className="w-full max-w-sm space-y-4 border border-gray-800 p-10 rounded-3xl bg-[#16181c]/50">
-          <h2 className="text-4xl font-black text-center mb-8 italic text-white">SNS</h2>
-          {isSignup && (
-            <>
-              <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="ユーザーID" value={accountId} onChange={e => setAccountId(e.target.value)} />
-              <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="表示名" value={username} onChange={e => setUsername(e.target.value)} />
-            </>
-          )}
-          <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="メール" type="email" value={email} onChange={e => setEmail(e.target.value)} />
-          <input className="w-full p-3 bg-transparent border border-gray-800 rounded outline-none focus:border-[#1d9bf0]" placeholder="パスワード" type="password" value={password} onChange={e => setPassword(e.target.value)} />
-          <button className="w-full bg-white text-black p-3 rounded-full font-bold hover:bg-gray-200 transition">{isSignup ? "新規登録" : "ログイン"}</button>
-          <button type="button" onClick={() => setIsSignup(!isSignup)} className="text-[#1d9bf0] text-sm w-full text-center mt-2">{isSignup ? "アカウントをお持ちの方" : "初めての方"}</button>
-        </form>
-      </div>
-    );
+    return <AuthForm onAuthSuccess={handleAuthSuccess} />;
   }
 
   // --- ログイン後メインUI ---
